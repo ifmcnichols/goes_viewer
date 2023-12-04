@@ -185,7 +185,8 @@ def get_s3_keys(bucket, timestamp=None, prefix="ABL-L2-MCMIPF"):
 
         try:
             kwargs["ContinuationToken"] = resp["NextContinuationToken"]
-        except KeyError:
+        except KeyError as e:
+            logging.debug(f"Key error with ContinuationToken: {e}")
             break
 
 
@@ -264,10 +265,12 @@ def get_sqs_keys(sqs_url):
 
 
 def get_process_and_save(sqs_url, fig_dir):
+    logging.debug("Beginning get_process_and_save loop")
     for bucket, key in get_sqs_keys(sqs_url):
         logging.info('Processing file from %s: %s', bucket, key)
         try:
             img, filename = process_s3_file(bucket, key)
-        except ValueError:
+        except ValueError as e:
+            logging.debug(f"Error when getting s3 file: {e}")
             break
         save_local(img, filename, fig_dir)
