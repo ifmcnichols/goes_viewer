@@ -58,11 +58,62 @@ def open_file(path, corners, engine='h5netcdf'):
     return ds.isel(x=xarg, y=yarg)
 
 
+def normalize(value, lower_limit, upper_limit, clip=True):
+    """
+    Normalize values between 0 and 1.
+
+    Normalize between a lower and upper limit. In other words, it
+    converts your number to a value in the range between 0 and 1.
+    Follows `normalization formula
+    <https://stats.stackexchange.com/a/70807/220885>`_
+
+    This is the same concept as `contrast or histogram stretching
+    <https://staff.fnwi.uva.nl/r.vandenboomgaard/IPCV20162017/LectureNotes/IP/PointOperators/ImageStretching.html>`_
+
+
+    .. code:: python
+
+        NormalizedValue = (OriginalValue-LowerLimit)/(UpperLimit-LowerLimit)
+
+    Parameters
+    ----------
+    value :
+        The original value. A single value, vector, or array.
+    upper_limit :
+        The upper limit.
+    lower_limit :
+        The lower limit.
+    clip : bool
+        - True: Clips values between 0 and 1 for RGB.
+        - False: Retain the numbers that extends outside 0-1 range.
+    Output:
+        Values normalized between the upper and lower limit.
+    """
+    norm = (value - lower_limit) / (upper_limit - lower_limit)
+    if clip:
+        norm = np.clip(norm, 0, 1)
+    return norm
+
+
 def make_geocolor_image(ds):
     """
     Uses simple fractional combination with gamma correction as described in
     https://doi.org/10.1029/2018EA000379
     """
+    def breakpoint_stretch(C, breakpoint):
+        """
+        Contrast stretching by break point (number provided by Rick Kohrs)
+        """
+        lower = normalize(C, 0, 10)  # Low end
+        upper = normalize(C, 10, 255)  # High end
+
+        # Combine the two datasets
+        # This works because if upper=1 and lower==.7, then
+        # that means the upper value was out of range and the
+        # value for the lower pass was used instead.
+        combined = np.minimum(lower, upper)
+
+        return combined
     # Load the three channels into appropriate R, G, and B
     R = ds["CMI_C02"].data
     NIR = ds["CMI_C03"].data
@@ -78,30 +129,45 @@ def make_geocolor_image(ds):
     G = np.clip(G, 0, 1)
 
     # Apply the gamma correction
-    gamma = 1 / 1.7
+    #gamma = 1 / 1.7
+    gamma = .8
     R = np.power(R, gamma)
     G = np.power(G, gamma)
     B = np.power(B, gamma)
 
-    cleanIR = ds["CMI_C13"].data
-    ir_range = ds.max_brightness_temperature_C13.valid_range
+    # Convert Albedo to Brightness, ranging from 0-255 K
+    # (numbers based on email from Rick Kohrs)
+    R = np.sqrt(R * 100) * 25.5
+    G = np.sqrt(G * 100) * 25.5
+    B = np.sqrt(B * 100) * 25.5
 
-    cleanIR = (cleanIR - ir_range[0]) / (ir_range[1] - ir_range[0])
-    cleanIR = np.clip(cleanIR, 0, 1)
+    # Apply contrast stretching based on breakpoints
+    # (numbers based on email form Rick Kohrs)
+    R = breakpoint_stretch(R, 33)
+    G = breakpoint_stretch(G, 40)
+    B = breakpoint_stretch(B, 50)
+
+    cleanIR = ds["CMI_C13"].data
+    #ir_range = ds.max_brightness_temperature_C13.valid_range
+
+    #cleanIR = (cleanIR - ir_range[0]) / (ir_range[1] - ir_range[0])
+    #cleanIR = np.clip(cleanIR, 0, 1)
+    IR = normalize(IR, 90, 313, clip=True)
     cleanIR = 1 - cleanIR
 
     # Lessen the brightness of the coldest clouds so they don't appear so bright
     # when we overlay it on the true color image.
-    cleanIR = cleanIR / 1.3
+    cleanIR = cleanIR / 1.4
 
     # Maximize the RGB values between the True Color Image and Clean IR image
     RGB_ColorIR = np.dstack(
         [np.maximum(R, cleanIR), np.maximum(G, cleanIR), np.maximum(B, cleanIR)]
     )
 
-    F = (259 * (CONTRAST + 255)) / (255.0 * 259 - CONTRAST)
-    out = F * (RGB_ColorIR - 0.5) + 0.5
-    out = np.clip(out, 0, 1)  # Force value limits 0 through 1.
+    #F = (259 * (CONTRAST + 255)) / (255.0 * 259 - CONTRAST)
+    #out = F * (RGB_ColorIR - 0.5) + 0.5
+    #out = np.clip(out, 0, 1)  # Force value limits 0 through 1.
+    out = np.power(RGB_ColorIR, 1 / gamma)
     return out
 
 
@@ -274,3 +340,7 @@ def get_process_and_save(sqs_url, fig_dir):
             logging.debug(f"Error when getting s3 file: {e}")
             break
         save_local(img, filename, fig_dir)
+
+
+if __name__ == "__main__":
+    breakpoint()
