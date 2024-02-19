@@ -160,7 +160,7 @@ def post_processing(image, kernel_size=(9,9), sigma=1.0, amount=1.25, threshold=
     kernel_size: matrix size for gaussian blurring
     """
     if brightness is None:
-        brightness = 160 - image.mean()
+        brightness = 150 - image.mean()
     brightness += int(round(255*(1-contrast)/2))
     brightened = cv.addWeighted(image, contrast, image, 0, brightness)
     # Use an unsharp mask with gaussian blurring
