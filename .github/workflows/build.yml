@@ -2,6 +2,11 @@ name: buildandpush
 
 on:
   push:
+    paths-ignore:
+      - '.github/**'
+      - 'README.md'
+      - '.gitignore'
+      - '.gitattributes'
     branches:
       - master
     tags:
