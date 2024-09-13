@@ -2,6 +2,11 @@ name: buildandpush
 
 on:
   push:
+    paths-ignore:
+      - '.github/**'
+      - 'README.md'
+      - '.gitignore'
+      - '.gitattributes'
     branches:
       - master
     tags:
@@ -47,7 +52,8 @@ jobs:
       - name: Trigger deployment
         run: |
           REF=$(echo ${GITHUB_SHA} | cut -c -8)
-          DATA='{"ref":"master","inputs":{"name":"'${NAME}'","digest":"'${DIGEST}'","ref":"'${REF}'"}}'
+          MSG=https://github.com/UARENForecasting/${{ github.event.repository.name }}/commit/${{ github.sha }}
+          DATA='{"ref":"master","inputs":{"name":"'${NAME}'","digest":"'${DIGEST}'","ref":"'${REF}'","msg":"'"${MSG}"'"}}'          
           echo ${DATA}
           curl \
           -X POST \
